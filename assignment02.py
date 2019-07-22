@@ -12,10 +12,38 @@ Run this code with
 
 from yahoo import read_symbols, YAHOO_HTMLS
 
+import time
+import progressbar
+import urllib
+
+def create_request(symbol):
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/75.0.3770.142 Safari/537.36', }
+    return urllib.request.Request(url=f'https://finance.yahoo.com/quote/{symbol}/profile?p={symbol}', headers=headers)
+
+
+def send_request(req_param):
+    with urllib.request.urlopen(
+            create_request(req_param)) as response:
+        return response.read()
+
+
+def write_result(name, body):
+    with open(YAHOO_HTMLS / f'{name}.html', "w+", encoding="utf-8") as file:
+        file.write(body.decode('utf-8'))
+
 
 def scrape_descriptions_sync():
-    """Scrape companies descriptions synchronously."""
-    # TODO: Second assignment. Use https://docs.python.org/3/library/urllib.html
+    symbols = read_symbols()
+
+    i = 1
+    with progressbar.ProgressBar(max_value=len(symbols)) as bar:
+        for smb in symbols:
+            content = send_request(smb)
+            write_result(smb, content)
+            time.sleep(0.02)
+            bar.update(i)
+            i += 1
 
 
 def main():
@@ -24,3 +52,4 @@ def main():
 
 if __name__ == '__main__':
     main()
+
