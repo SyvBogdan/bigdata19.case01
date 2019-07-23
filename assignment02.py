@@ -41,7 +41,6 @@ def scrape_descriptions_sync():
         for smb in symbols:
             content = send_request(smb)
             write_result(smb, content)
-            time.sleep(0.02)
             bar.update(i)
             i += 1
 
