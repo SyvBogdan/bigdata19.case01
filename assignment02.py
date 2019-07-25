@@ -9,11 +9,13 @@ Run this code with
 
     > fab run assignment02.py
 """
+import sys
+
+from tqdm import tqdm
 
 from yahoo import read_symbols, YAHOO_HTMLS
 
 import time
-import progressbar
 import urllib
 
 def create_request(symbol):
@@ -36,14 +38,14 @@ def write_result(name, body):
 def scrape_descriptions_sync():
     symbols = read_symbols()
 
-    i = 1
-    with progressbar.ProgressBar(max_value=len(symbols)) as bar:
-        for smb in symbols:
+    progress = tqdm(total=len(symbols), file=sys.stdout, disable=False)
+
+    YAHOO_HTMLS.mkdir(parents=True, exist_ok=True)
+
+    for smb in symbols:
             content = send_request(smb)
             write_result(smb, content)
-            bar.update(i)
-            i += 1
-
+            progress.update(1)
 
 def main():
     scrape_descriptions_sync()
