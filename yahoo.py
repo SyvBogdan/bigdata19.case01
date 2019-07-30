@@ -15,15 +15,16 @@ from tqdm import tqdm
 import config as cfg
 
 YAHOO_ARCH = cfg.BUILDDIR / 'yahoo.tbz2'
+YAHOO_DATA = cfg.BUILDDIR / 'yahoo.csv'
 YAHOO_HTMLS = cfg.BUILDDIR / 'yahoo_html'
 YAHOO_PARQUET = cfg.BUILDDIR / 'yahoo.parquet'
-YAHOO_DATA = cfg.BUILDDIR / 'yahoo.csv'
+
 
 NASDAQ_FILES = (
     cfg.DATADIR / 'nasdaq' / 'amex.csv',
     cfg.DATADIR / 'nasdaq' / 'nasdaq.csv',
     cfg.DATADIR / 'nasdaq' / 'nyse.csv',
-)
+    )
 
 
 def read_symbols():
@@ -49,7 +50,7 @@ def scrape_descriptions_async():
 
     headers = {
         'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_14_5) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/12.1.1 Safari/605.1.15',
-    }
+        }
 
     async def fetch(symbol, session):
         async with session.get(f'https://finance.yahoo.com/quote/{symbol}/profile?p={symbol}') as response:
@@ -64,8 +65,7 @@ def scrape_descriptions_async():
             await asyncio.gather(*tasks)
 
     loop = asyncio.get_event_loop()
-    loop.set_exception_handler(
-        lambda x, y: None)  # suppress exceptions because of bug in Python 3.7.3 + aiohttp + asyncio
+    loop.set_exception_handler(lambda x, y: None)  # suppress exceptions because of bug in Python 3.7.3 + aiohttp + asyncio
     loop.run_until_complete(asyncio.ensure_future(run(symbols)))
     progress.close()
 
@@ -92,8 +92,7 @@ def compress_descriptions(encoding='utf-8', batch_size=1000, compression='BROTLI
     writer = None
     for batch in read_incremental():
         if writer is None:
-            writer = pq.ParquetWriter(YAHOO_PARQUET, batch.schema, use_dictionary=False, compression=compression,
-                                      flavor={'spark'})
+            writer = pq.ParquetWriter(YAHOO_PARQUET, batch.schema, use_dictionary=False, compression=compression, flavor={'spark'})
         writer.write_table(batch)
     writer.close()
 
@@ -121,12 +120,16 @@ def decompress_descriptions(encoding='utf-8'):
 
 
 def parse_descriptions(src=YAHOO_PARQUET, dst=YAHOO_DATA):
+    """Parse scraped pages."""
+
     reader = pq.ParquetFile(src)
 
     with tqdm(total=reader.metadata.num_rows) as progress:
-        with open(dst, 'w', encoding='utf-8', newline='') as f:
-            writer = csv.DictWriter(f, fieldnames=['symbol', 'sector', 'industry', 'employees','description'])
+
+        with open(dst, 'w', encoding='utf-8') as f:
+            writer = csv.DictWriter(f, fieldnames=['symbol', 'sector', 'industry', 'employees', 'description'])
             writer.writeheader()
+
             for g in range(reader.metadata.num_row_groups):
                 table = reader.read_row_group(g).to_pydict()
                 for symbol, html in zip(table['symbol'], table['html']):
@@ -134,20 +137,18 @@ def parse_descriptions(src=YAHOO_PARQUET, dst=YAHOO_DATA):
 
                     row = {'symbol': symbol.strip()}
                     row['description'] = '\n'.join(tree.xpath('//section[h2//*[text()="Description"]]/p/text()'))
-                    info = (tree.xpath('//div[@class="asset-profile-container"]//p[span[text()="Sector"]]') or [None])[
-                        0]
+                    info = (tree.xpath('//div[@class="asset-profile-container"]//p[span[text()="Sector"]]') or [None])[0]
                     if info is not None:
                         row['sector'] = (info.xpath('./span[text()="Sector"]/following-sibling::span[1]/text()') or [''])[0]
                         row['industry'] = (info.xpath('./span[text()="Industry"]/following-sibling::span[1]/text()') or [''])[0]
                         row['employees'] = (info.xpath('./span[text()="Full Time Employees"]/following-sibling::span[1]/span/text()') or [''])[0].replace(',', '')
 
                     writer.writerow(row)
-                    progress.update(1)
+                    progress.update()
 
 
 def main():
-    # scrape_descriptions_async()
-    parse_descriptions()
+    scrape_descriptions_async()
 
 
 if __name__ == '__main__':
